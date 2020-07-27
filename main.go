@@ -3,12 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/loeffel-io/ls-lint/base"
+	"gopkg.in/yaml.v2"
 )
 
 func getFullPath(path string) string {
@@ -16,53 +18,58 @@ func getFullPath(path string) string {
 }
 
 func main() {
-	var f flagSlice
-	flag.Var(&f, "f", "Specify alternate config files (default: .ls-lint.yml)")
+	var files base.FlagFiles
+	flag.Var(&files, "f", "Specify alternate config files (default: .ls-lint.yml)")
 	flag.Parse()
-
-	var config = &Config{
-		RWMutex: new(sync.RWMutex),
-	}
 
 	var linter = &Linter{
 		Errors:  make([]*Error, 0),
 		RWMutex: new(sync.RWMutex),
 	}
 
-	log.Fatalf("%+v", f)
-
-	// open config file
-	file, err := os.Open(".ls-lint.yml")
-
-	if err != nil {
-		log.Fatal(err)
+	if len(files) == 0 {
+		if err := files.Set(".ls-lint.yml"); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	// close file
-	defer func() {
-		err = file.Close()
+	var configs []*Config
+	for _, f := range files {
+		// open config file
+		file, err := os.Open(f)
 
 		if err != nil {
 			log.Fatal(err)
 		}
-	}()
 
-	// read file
-	configBytes, err := ioutil.ReadAll(file)
+		// read file
+		configBytes, err := ioutil.ReadAll(file)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	// to yaml
-	err = yaml.Unmarshal(normalizeConfig(configBytes, byte(runeUnixSep), byte(runeSep)), &config)
+		// config
+		var tmpConfig = &Config{
+			RWMutex: new(sync.RWMutex),
+		}
 
-	if err != nil {
-		log.Fatal(err)
+		// to yaml
+		if err := yaml.Unmarshal(normalizeConfig(configBytes, byte(runeUnixSep), byte(runeSep)), &tmpConfig); err != nil {
+			log.Fatal(err)
+		}
+
+		// close file
+		if err := file.Close(); err != nil {
+			log.Fatal(err)
+		}
+
+		// add config
+		configs = append(configs, tmpConfig)
 	}
 
 	// runner
-	if err := linter.Run(config); err != nil {
+	if err := linter.Run(configs[0]); err != nil {
 		log.Fatal(err)
 	}
 
