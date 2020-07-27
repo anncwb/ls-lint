@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -15,6 +16,10 @@ func getFullPath(path string) string {
 }
 
 func main() {
+	var f flagSlice
+	flag.Var(&f, "f", "Specify alternate config files (default: .ls-lint.yml)")
+	flag.Parse()
+
 	var config = &Config{
 		RWMutex: new(sync.RWMutex),
 	}
@@ -23,6 +28,8 @@ func main() {
 		Errors:  make([]*Error, 0),
 		RWMutex: new(sync.RWMutex),
 	}
+
+	log.Fatalf("%+v", f)
 
 	// open config file
 	file, err := os.Open(".ls-lint.yml")
